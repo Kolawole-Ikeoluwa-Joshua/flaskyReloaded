@@ -2,7 +2,7 @@ from flask import Flask, request, jsonify
 from flask_sqlalchemy import SQLAlchemy
 from flask_marshmallow import Marshmallow
 import hashlib
-import os
+import os, random, requests
 
 # Init app
 app = Flask(__name__)
@@ -88,15 +88,30 @@ action_schema = ActionSchema()
 actions_schema = ActionSchema(many=True)
 
 
-@app.route('/api/users/register')
+@app.route('/api/users/register',methods=['POST','GET'])
 def user_reg():
     # fetch user data
-    username = request.json['username']
-    password = request.json['password']
+    if request.method == 'POST':
+        content = request.get_json()
+        username = content['username']
+        password = content['password']
+        password = refgen(password)
+        new_user = User(username, password)
+        db.session.add(new_user)
+        db.session.commit()
 
-    new_user = User(username=username,password=password)
+        return user_schema.jsonify(new_user)
 
+@app.route('/api/users/auth')
+def user_auth():
+    content = request.get_json()
+    username = content['username']
+    password = content['password']
+    
+    #validate password entry
+    
 
 # Run Server
 if __name__ == '__main__':
+    db.create_all()
     app.run(debug=True)
