@@ -1,20 +1,14 @@
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, make_response
 from flask_sqlalchemy import SQLAlchemy
 from flask_marshmallow import Marshmallow
-import hashlib
+import hashlib, uuid
 import os
+from werkzeug.security import generate_password_hash, check_password_hash
+import jwt,datetime
 
 # Init app
 app = Flask(__name__)
 basedir = os.path.abspath(os.path.dirname(__file__))
-
-# reference key gen
-def refgen(key):
-	rand = [i for i in key]
-	random.shuffle(rand)
-	rand = ''.join(rand)
-	rand = hashlib.md5(rand.encode('utf-8')).hexdigest()
-	return rand
 
 # Database
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///' + os.path.join(basedir, 'db.sqlite')
@@ -72,7 +66,7 @@ class Action(db.Model):
 
 class ProjectSchema(ma.Schema):
     class Meta:
-        fields = ('name', 'description', 'completed')
+        fields = ('id','name', 'description', 'completed')
 
 
 project_schema = ProjectSchema()
@@ -88,15 +82,77 @@ action_schema = ActionSchema()
 actions_schema = ActionSchema(many=True)
 
 
-@app.route('/api/users/register')
+@app.route('/api/users/register',methods=['GET','POST'])
 def user_reg():
-    # fetch user data
-    username = request.json['username']
-    password = request.json['password']
+    if request.method == 'POST':
+        data = request.get_json()
+        hashed_password = generate_password_hash(data['password'],method='sha256')
+        user = User(username=data['username'],password=hashed_password)
 
-    new_user = User(username=username,password=password)
+        db.session.add(user)
+        db.session.commit()
+
+        if User.query.filter_by(username=user.username).first():
+            return make_response('Registration completed',200)
+
+@app.route('/api/projects',methods=['GET','POST'])
+def projects():
+    if request.method == 'GET':
+        projects = Project.query.all()
+        return jsonify(projects_schema.dump(projects))
+    elif request.method == 'POST':
+        data = request.get_json()
+        new_project = Project(name=data['name'],description=data['description'],completed=data['completed'])
+        db.session.add(new_project)
+        db.session.commit()
+        return make_response('Project Added',200)
+
+@app.route('/api/projects/<project_id>',methods=['GET','PUT','DELETE'])
+def project(project_id):
+    if request.method == 'GET':
+        project = Project.query.filter_by(id=project_id).first()
+        if project:
+            return project_schema.jsonify(project)
+        return make_response('No such project found',404)
+    if request.method == 'PUT':
+        project = Project.query.filter_by(id=project_id).first()
+        if project:
+            data = request.get_json()
+            project.name = data['name']
+            project.description = data['description']
+            project.completed = data['completed']
+            db.session.commit()
+
+            return make_response('Updated project',200)
+        return make_response('No such project found',404)
+    if request.method == 'DELETE':
+        project = Project.query.filter_by(id=project_id).first()
+        if project:
+            db.session.delete(project)
+            db.session.commit()
+            return make_response('Deleted Project',200)
+        return make_response('No such project found',404)
+
+@app.route('/api/users/auth')
+def user_auth():
+    auth = request.authorization
+    if not auth or not auth.password or not auth.username:
+        return make_response('Could not verify',401,{'WWW-Authenticate' : 'Basic realm="Login Required"'})
+
+    user = User.filter_by(username=auth.username).first()
+
+    if not user:
+        return make_response('User not found',404,{'WWW-Authenticate' : 'Basic realm="Login Required"'})
+    
+    if check_password_hash(user.password,auth.password):
+        token = jwt.encode({"id":user.id, "exp":datetime.datetime.utcnow() + datetime.timedelta(minutes=30)})
+
+        return jsonify({"token":token.decode('UTF-8')})
+        
+    return make_response('Could not verify',401,{'WWW-Authenticate' : 'Basic realm="Login Required"'})
 
 
 # Run Server
 if __name__ == '__main__':
+    db.create_all()
     app.run(debug=True)
