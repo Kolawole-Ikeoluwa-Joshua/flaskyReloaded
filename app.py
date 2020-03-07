@@ -133,6 +133,7 @@ def projects(current_user):
         return make_response('Project Added',200)
 
 @app.route('/api/projects/<project_id>',methods=['GET','PUT','DELETE'])
+@token_required
 def project(current_user,project_id):
     if not current_user:
         return ({"message":"Not logged In"}),401
