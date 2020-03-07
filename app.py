@@ -1,15 +1,10 @@
 from flask import Flask, request, jsonify, make_response
 from flask_sqlalchemy import SQLAlchemy
 from flask_marshmallow import Marshmallow
-<<<<<<< HEAD
-import hashlib
-import os, random, requests
-=======
 import hashlib, uuid
 import os
 from werkzeug.security import generate_password_hash, check_password_hash
 import jwt,datetime
->>>>>>> 4cedd8357dbc818e71babc9076b0548de06555a1
 
 # Init app
 app = Flask(__name__)
@@ -137,6 +132,11 @@ def project(project_id):
             db.session.commit()
             return make_response('Deleted Project',200)
         return make_response('No such project found',404)
+
+@app.route('/api/users')
+def all_users():
+    users = User.query.all()
+    return jsonify(users_schema.dump(users)),200
 
 @app.route('/api/users/auth')
 def user_auth():
