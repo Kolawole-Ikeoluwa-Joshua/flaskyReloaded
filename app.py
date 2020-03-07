@@ -106,10 +106,19 @@ def user_reg():
 def user_auth():
     content = request.get_json()
     username = content['username']
-    password = content['password']
+    password_ = content['password']
     
-    #validate password entry
-    
+   # check if user exists
+    user = User.query.filter_by(username=username).first()
+    if user:
+         #validate password entry
+        password = user.password
+        if refgen(password_) == password:
+            return user_schema.jsonify(user)
+        else:
+            return 401
+    else:
+        return 404
 
 # Run Server
 if __name__ == '__main__':
